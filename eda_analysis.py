@@ -1,92 +1,138 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
 import os
+
 print("=" * 60)
-print("EXPLORATORY DATA ANALYSIS (EDA)")
+print("EDA ANALYSIS STARTED")
 print("=" * 60)
-# LOAD CLEANED DATASETS
-fund_master = pd.read_csv("data/processed/fund_master_clean.csv")
-nav = pd.read_csv("data/processed/nav_history_clean.csv")
-aum = pd.read_csv("data/processed/aum_clean.csv")
-sip = pd.read_csv("data/processed/sip_clean.csv")
-category = pd.read_csv("data/processed/category_clean.csv")
-folios = pd.read_csv("data/processed/folios_clean.csv")
-performance = pd.read_csv("data/processed/performance_clean.csv")
-transactions = pd.read_csv("data/processed/transactions_clean.csv")
-holdings = pd.read_csv("data/processed/holdings_clean.csv")
-benchmark = pd.read_csv("data/processed/benchmark_clean.csv")
+
+# ==================================================
 # CREATE REPORTS FOLDER
+# ==================================================
+
 os.makedirs("reports", exist_ok=True)
-# TOP 10 FUNDS BY 5-YEAR RETURN
-print("\n" + "=" * 60)
-print("TOP 10 FUNDS BY 5-YEAR RETURN")
-print("=" * 60)
-top_returns = performance.sort_values(
-    "return_5yr_pct",
-    ascending=False
+
+# ==================================================
+# LOAD DATA
+# ==================================================
+
+fund_master = pd.read_csv(
+    "data/processed/fund_master_clean.csv"
 )
-print(
-    top_returns[
-        ["scheme_name", "fund_house", "return_5yr_pct"]
-    ].head(10)
+
+nav = pd.read_csv(
+    "data/processed/nav_history_clean.csv"
 )
-# Save report
-top_returns.to_csv(
-    "reports/top_funds.csv",
-    index=False
+
+aum = pd.read_csv(
+    "data/processed/aum_clean.csv"
 )
-# FUND HOUSE AUM RANKING
-print("\n" + "=" * 60)
-print("FUND HOUSE AUM RANKING")
-print("=" * 60)
+
+sip = pd.read_csv(
+    "data/processed/sip_clean.csv"
+)
+
+category = pd.read_csv(
+    "data/processed/category_clean.csv"
+)
+
+folios = pd.read_csv(
+    "data/processed/folios_clean.csv"
+)
+
+performance = pd.read_csv(
+    "data/processed/performance_clean.csv"
+)
+
+transactions = pd.read_csv(
+    "data/processed/transactions_clean.csv"
+)
+
+holdings = pd.read_csv(
+    "data/processed/holdings_clean.csv"
+)
+
+benchmark = pd.read_csv(
+    "data/processed/benchmark_clean.csv"
+)
+
+# ==================================================
+# DATE CONVERSION
+# ==================================================
+
+nav["date"] = pd.to_datetime(nav["date"])
+
 aum["date"] = pd.to_datetime(aum["date"])
-latest_aum = (
-    aum.sort_values("date")
-       .groupby("fund_house")
-       .tail(1)
+
+benchmark["date"] = pd.to_datetime(
+    benchmark["date"]
 )
-latest_aum = latest_aum.sort_values(
-    "aum_crore",
+
+# ==================================================
+# 1. NAV TREND ANALYSIS
+# ==================================================
+
+print("Creating NAV Trend Chart...")
+
+merged = nav.merge(
+    fund_master[
+        ["amfi_code", "scheme_name"]
+    ],
+    on="amfi_code"
+)
+
+fig = px.line(
+    merged,
+    x="date",
+    y="nav",
+    color="scheme_name",
+    title="NAV Trend of All Schemes"
+)
+
+fig.write_html(
+    "reports/nav_trend_all_funds.html"
+)
+
+# ==================================================
+# 2. AUM RANKING
+# ==================================================
+
+print("Creating AUM Ranking...")
+
+aum_rank = aum.groupby(
+    "fund_house"
+)["aum_crore"].mean().sort_values(
     ascending=False
 )
-print(
-    latest_aum[
-        ["fund_house", "aum_crore"]
-    ]
-)
-latest_aum.to_csv(
-    "reports/aum_ranking.csv",
-    index=False
-)
-# AUM Chart
+
 plt.figure(figsize=(10, 5))
-plt.bar(
-    latest_aum["fund_house"],
-    latest_aum["aum_crore"]
+
+sns.barplot(
+    x=aum_rank.values,
+    y=aum_rank.index
 )
-plt.xticks(rotation=45)
-plt.title("Fund House AUM Ranking")
-plt.ylabel("AUM (Crore)")
+
+plt.title("Average AUM by Fund House")
+
 plt.tight_layout()
+
 plt.savefig(
     "reports/aum_ranking.png"
 )
+
 plt.close()
-# SIP INFLOW TREND
+
+aum_rank.to_csv(
+    "reports/aum_ranking.csv"
+)
+
+# ==================================================
+# 3. SIP TREND
 # ==================================================
 
-print("\n" + "=" * 60)
-print("SIP INFLOW SUMMARY")
-print("=" * 60)
-
-print(
-    sip[
-        [
-            "month",
-            "sip_inflow_crore"
-        ]
-    ].tail()
-)
+print("Creating SIP Trend...")
 
 plt.figure(figsize=(12, 5))
 
@@ -97,8 +143,7 @@ plt.plot(
 
 plt.xticks(rotation=45)
 
-plt.title("Monthly SIP Inflows")
-plt.ylabel("Crore")
+plt.title("Monthly SIP Inflow Trend")
 
 plt.tight_layout()
 
@@ -109,33 +154,27 @@ plt.savefig(
 plt.close()
 
 # ==================================================
-# CATEGORY INFLOWS
+# 4. CATEGORY INFLOWS
 # ==================================================
 
-print("\n" + "=" * 60)
-print("CATEGORY INFLOWS")
-print("=" * 60)
+print("Creating Category Heatmap...")
 
-category_summary = (
-    category.groupby("category")
-    ["net_inflow_crore"]
-    .sum()
-    .sort_values(ascending=False)
+pivot = category.pivot(
+    index="category",
+    columns="month",
+    values="net_inflow_crore"
 )
 
-print(category_summary)
+plt.figure(figsize=(14, 6))
 
-category_summary.to_csv(
-    "reports/category_summary.csv"
+sns.heatmap(
+    pivot,
+    cmap="YlGnBu"
 )
 
-plt.figure(figsize=(10, 6))
-
-category_summary.sort_values().plot(
-    kind="barh"
+plt.title(
+    "Category Inflow Heatmap"
 )
-
-plt.title("Category-wise Net Inflows")
 
 plt.tight_layout()
 
@@ -146,91 +185,190 @@ plt.savefig(
 plt.close()
 
 # ==================================================
-# INVESTOR DEMOGRAPHICS
+# 5. AGE DISTRIBUTION
 # ==================================================
 
-print("\n" + "=" * 60)
-print("INVESTOR GENDER DISTRIBUTION")
-print("=" * 60)
+print("Creating Age Distribution...")
 
-gender_count = (
-    transactions["gender"]
-    .value_counts()
+age = transactions[
+    "age_group"
+].value_counts()
+
+plt.figure(figsize=(6, 6))
+
+plt.pie(
+    age,
+    labels=age.index,
+    autopct="%1.1f%%"
 )
 
-print(gender_count)
-
-gender_count.to_csv(
-    "reports/gender_distribution.csv"
+plt.title(
+    "Age Group Distribution"
 )
 
-print("\n" + "=" * 60)
-print("INVESTOR AGE GROUP DISTRIBUTION")
-print("=" * 60)
-
-age_count = (
-    transactions["age_group"]
-    .value_counts()
+plt.savefig(
+    "reports/age_distribution.png"
 )
 
-print(age_count)
+plt.close()
 
-age_count.to_csv(
+age.to_csv(
     "reports/age_distribution.csv"
 )
 
-print("\n" + "=" * 60)
-print("TOP 10 STATES")
-print("=" * 60)
+# ==================================================
+# 6. GENDER DISTRIBUTION
+# ==================================================
 
-state_count = (
-    transactions["state"]
-    .value_counts()
-    .head(10)
+print("Creating Gender Distribution...")
+
+gender = transactions[
+    "gender"
+].value_counts()
+
+plt.figure(figsize=(6, 6))
+
+plt.pie(
+    gender,
+    labels=gender.index,
+    autopct="%1.1f%%"
 )
 
-print(state_count)
+plt.title(
+    "Gender Distribution"
+)
 
-state_count.to_csv(
+plt.savefig(
+    "reports/gender_distribution.png"
+)
+
+plt.close()
+
+gender.to_csv(
+    "reports/gender_distribution.csv"
+)
+
+# ==================================================
+# 7. TOP STATES
+# ==================================================
+
+print("Creating State Analysis...")
+
+top_states = transactions.groupby(
+    "state"
+)["amount_inr"].sum().sort_values(
+    ascending=False
+)
+
+top_states.to_csv(
     "reports/top_states.csv"
 )
 
-# ==================================================
-# RISK VS RETURN
-# ==================================================
+plt.figure(figsize=(10, 6))
 
-print("\n" + "=" * 60)
-print("TOP RISK-RETURN FUNDS")
-print("=" * 60)
-
-risk_return = performance[
-    [
-        "scheme_name",
-        "return_3yr_pct",
-        "std_dev_ann_pct"
-    ]
-]
-
-print(
-    risk_return.sort_values(
-        "return_3yr_pct",
-        ascending=False
-    ).head(10)
+top_states.head(10).plot(
+    kind="barh"
 )
+
+plt.title(
+    "Top States by Investment"
+)
+
+plt.tight_layout()
+
+plt.savefig(
+    "reports/top_states.png"
+)
+
+plt.close()
+
+# ==================================================
+# 8. T30 vs B30
+# ==================================================
+
+city = transactions[
+    "city_tier"
+].value_counts()
+
+plt.figure(figsize=(6, 6))
+
+plt.pie(
+    city,
+    labels=city.index,
+    autopct="%1.1f%%"
+)
+
+plt.title(
+    "T30 vs B30 Distribution"
+)
+
+plt.savefig(
+    "reports/city_tier_distribution.png"
+)
+
+plt.close()
+
+# ==================================================
+# 9. FOLIO GROWTH
+# ==================================================
+
+print("Creating Folio Growth...")
+
+plt.figure(figsize=(12, 5))
+
+plt.plot(
+    folios["month"],
+    folios["total_folios_crore"]
+)
+
+plt.xticks(rotation=45)
+
+plt.title(
+    "Industry Folio Growth"
+)
+
+plt.tight_layout()
+
+plt.savefig(
+    "reports/folio_growth.png"
+)
+
+plt.close()
+
+# ==================================================
+# 10. TOP FUNDS
+# ==================================================
+
+top_funds = performance.sort_values(
+    "return_5yr_pct",
+    ascending=False
+)
+
+top_funds.to_csv(
+    "reports/top_funds.csv",
+    index=False
+)
+
+# ==================================================
+# 11. RISK VS RETURN
+# ==================================================
+
+print("Creating Risk vs Return...")
 
 plt.figure(figsize=(10, 6))
 
 plt.scatter(
     performance["std_dev_ann_pct"],
-    performance["return_3yr_pct"]
+    performance["return_5yr_pct"]
 )
 
-plt.xlabel("Risk (Std Dev)")
-plt.ylabel("3-Year Return")
+plt.xlabel("Risk")
 
-plt.title("Risk vs Return")
+plt.ylabel("Return")
 
-plt.tight_layout()
+plt.title(
+    "Risk vs Return"
+)
 
 plt.savefig(
     "reports/risk_vs_return.png"
@@ -239,72 +377,132 @@ plt.savefig(
 plt.close()
 
 # ==================================================
-# PORTFOLIO SECTOR ANALYSIS
+# 12. CORRELATION MATRIX
 # ==================================================
 
-print("\n" + "=" * 60)
-print("TOP SECTORS")
-print("=" * 60)
+print("Creating Correlation Matrix...")
 
-sector_summary = (
-    holdings.groupby("sector")
-    ["weight_pct"]
-    .sum()
-    .sort_values(ascending=False)
+pivot_nav = nav.pivot_table(
+    index="date",
+    columns="amfi_code",
+    values="nav"
 )
 
-print(sector_summary.head(10))
+returns = pivot_nav.pct_change()
 
-sector_summary.to_csv(
+corr = returns.corr()
+
+plt.figure(figsize=(12, 8))
+
+sns.heatmap(
+    corr,
+    cmap="coolwarm"
+)
+
+plt.title(
+    "NAV Return Correlation Matrix"
+)
+
+plt.tight_layout()
+
+plt.savefig(
+    "reports/correlation_matrix.png"
+)
+
+plt.close()
+
+# ==================================================
+# 13. SECTOR ALLOCATION
+# ==================================================
+
+print("Creating Sector Analysis...")
+
+sector = holdings.groupby(
+    "sector"
+)["weight_pct"].sum()
+
+sector.to_csv(
     "reports/sector_summary.csv"
 )
 
-# ==================================================
-# BENCHMARK ANALYSIS
-# ==================================================
+plt.figure(figsize=(8, 8))
 
-benchmark["date"] = pd.to_datetime(
-    benchmark["date"]
+plt.pie(
+    sector,
+    labels=sector.index,
+    autopct="%1.1f%%"
 )
 
-benchmark_summary = (
-    benchmark.groupby("index_name")
-    ["close_value"]
-    .mean()
+centre = plt.Circle(
+    (0, 0),
+    0.60,
+    fc="white"
 )
 
-print("\n" + "=" * 60)
-print("BENCHMARK AVERAGES")
-print("=" * 60)
+fig = plt.gcf()
 
-print(benchmark_summary)
+fig.gca().add_artist(
+    centre
+)
+
+plt.title(
+    "Sector Allocation"
+)
+
+plt.savefig(
+    "reports/sector_donut.png"
+)
+
+plt.close()
+
+# ==================================================
+# 14. BENCHMARK SUMMARY
+# ==================================================
+
+benchmark_summary = benchmark.groupby(
+    "index_name"
+)["close_value"].agg(
+    ["min", "max", "mean"]
+)
 
 benchmark_summary.to_csv(
     "reports/benchmark_summary.csv"
 )
 
 # ==================================================
-# COMPLETION MESSAGE
+# 15. CATEGORY SUMMARY
 # ==================================================
 
-print("\n" + "=" * 60)
-print("EDA COMPLETED SUCCESSFULLY")
+category_summary = category.groupby(
+    "category"
+)["net_inflow_crore"].sum()
+
+category_summary.to_csv(
+    "reports/category_summary.csv"
+)
+
+print("=" * 60)
+print("EDA ANALYSIS COMPLETED")
 print("=" * 60)
 
-print("\nGenerated Reports:")
-
-print("top_funds.csv")
-print("aum_ranking.csv")
-print("gender_distribution.csv")
-print("age_distribution.csv")
-print("top_states.csv")
-print("category_summary.csv")
-print("sector_summary.csv")
-print("benchmark_summary.csv")
-
-print("\nGenerated Charts:")
-
-print("aum_ranking.png")
-print("sip_trend.png")
-print("category_inflows.png")
-print("risk_vs_return.png")
+print("\nFiles generated in reports folder:")
+print("""
+nav_trend_all_funds.html
+aum_ranking.png
+aum_ranking.csv
+sip_trend.png
+category_inflows.png
+age_distribution.png
+gender_distribution.png
+top_states.csv
+top_states.png
+city_tier_distribution.png
+folio_growth.png
+top_funds.csv
+risk_vs_return.png
+correlation_matrix.png
+sector_donut.png
+sector_summary.csv
+benchmark_summary.csv
+category_summary.csv
+""")
